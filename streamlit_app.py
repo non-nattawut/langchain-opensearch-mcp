@@ -25,6 +25,7 @@ if "chat_history_include_tool_log" not in st.session_state:
 with st.sidebar:
     st.markdown("### Chat Controls")
     if st.button("➕ New Chat / Clear History"):
+        st.session_state.chat_history_include_tool_log = []
         st.session_state.messages = []
         st.rerun()
 
