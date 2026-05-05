@@ -44,7 +44,7 @@ if prompt := st.chat_input("What is on your mind?"):
     with st.chat_message(role_assistant):
         message_placeholder = st.empty()
         full_display_response = ""
-        pure_ai_text = ""
+        ai_message = ""
         tool_messages = []
 
         # Stream chat response
@@ -58,13 +58,14 @@ if prompt := st.chat_input("What is on your mind?"):
                 message_placeholder.markdown(full_display_response + "▌")
 
             if chunk_type == AIResponse.TEXT:
-                pure_ai_text += chunk_content
+                ai_message += chunk_content
             elif chunk_type in [AIResponse.TOOL_CALL, AIResponse.TOOL_RESPONSE]:
                 tool_messages.append(chunk_content)
 
         message_placeholder.markdown(full_display_response)
 
-    # Add messages to chat history
+    # Add messages to chat history include MCP request/response JSON
+    # separate from full message since AI can get confused by JSON in history
     st.session_state.chat_history_include_tool_log.append({"role": role_user, "content": prompt})
     st.session_state.chat_history_include_tool_log.append({"role": role_assistant, "content": full_display_response})
 
@@ -72,4 +73,4 @@ if prompt := st.chat_input("What is on your mind?"):
     st.session_state.messages.append(HumanMessage(name=role_user, content=prompt))
     for tool in tool_messages:
         st.session_state.messages.append(tool)
-    st.session_state.messages.append(AIMessage(name=role_assistant, content=pure_ai_text))
+    st.session_state.messages.append(AIMessage(name=role_assistant, content=ai_message))

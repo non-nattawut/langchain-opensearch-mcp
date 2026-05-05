@@ -2,9 +2,7 @@ import os
 import asyncio
 import traceback
 import json
-from typing import List
 
-import atexit
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain.agents import create_agent
 from dotenv import load_dotenv
@@ -23,12 +21,13 @@ class LLMService:
         self.mcp_service = MCPService()
         self.system_prompt = SkillService.load_skills()
         self.tools = []
+        self.accumulated_tool_call_chunk = None
 
         # Set the loop as current for this thread (Streamlit usually runs in threads)
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
 
-        # Initialize MCP and Agent synchronously during object creation
+        # Initialize MCP and Agent
         try:
             print(f"Initializing MCP tools and Agent for {os.getenv('LLM_PROVIDER', 'NVIDIA')}...")
             # Use run_until_complete to execute the async tool fetching
@@ -43,12 +42,14 @@ class LLMService:
                 tools=self.tools,
                 system_prompt=self.system_prompt
             )
+            print("Agent initialized successfully.")
 
     async def astream_response(self, message: str, chat_history=None):
         """Asynchronous stream response that handles the tool-calling loop."""
         try:
+            self.accumulated_tool_call_chunk = None
+
             inputs = {"messages": chat_history + [HumanMessage(name="user", content=message)]}
-            accumulate_tool_call = None
             print("======= prompt log =======")
             print(message)
 
@@ -59,51 +60,23 @@ class LLMService:
                     if msg.content or msg.tool_calls:
                         print(msg) # log
 
+                    # AI Response
                     if isinstance(msg, AIMessage) and msg.content:
-                        content = msg.content
-                        if isinstance(content, str):
-                            yield {"type": AIResponse.TEXT, "content": content}
-                        elif isinstance(content, List): # handle GEMINI response
-                            yield {"type": AIResponse.TEXT, "content": content[0].get("text")}
+                        yield {"type": AIResponse.TEXT, "content": msg.content}
 
+                    # Tool Chunk Merge
                     elif isinstance(msg, AIMessage) and not msg.content and msg.tool_calls:
-                        if accumulate_tool_call is None:
-                            accumulate_tool_call = msg
+                        if self.accumulated_tool_call_chunk is None:
+                            self.accumulated_tool_call_chunk = msg
                         else:
-                            accumulate_tool_call += msg
+                            self.accumulated_tool_call_chunk += msg
 
+                    # Tool Response
                     elif isinstance(msg, ToolMessage):
-                        if accumulate_tool_call:
-                            yield {"type": AIResponse.TOOL_CALL,
-                                   "content": accumulate_tool_call}
-
-                            name = accumulate_tool_call.tool_calls[0].get("name", "Unknown Tool")
-                            args = accumulate_tool_call.tool_calls[0].get("args", {})
-                            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
-                                   "content": f"️🛠️ Calling tool: {name}\n\n"}
-
-                            formatted_args = json.dumps(args, indent=2, ensure_ascii=False)
-                            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
-                                   "content": f"**Arguments:**\n"
-                                              f"```json\n{formatted_args}\n```\n"}
-
-                            accumulate_tool_call = None
-
-                        try:
-                            data = json.loads(msg.content)
-                            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
-                            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
-                                   "content": f"✅ Tool {msg.name}\n\n"
-                                              f"**Response:**\n"
-                                              f"```json\n{formatted_json}\n```\n"}
-                        except (json.JSONDecodeError, TypeError):
-                            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
-                                   "content": f"✅ Tool {msg.name}\n\n"
-                                              f"**Response:**\n"
-                                              f"```json\n{msg.content}\n```\n"}
-                        finally:
-                            yield {"type": AIResponse.TOOL_RESPONSE,
-                                   "content": msg}
+                        for item in self._tool_call_response():
+                            yield item
+                        for item in self._tool_message_response(msg):
+                            yield item
             else:
                 async for chunk in self.llm.astream(inputs, stream_mode="messages"):
                     yield {"type": AIResponse.TEXT, "content": chunk.content}
@@ -111,6 +84,40 @@ class LLMService:
         except Exception as e:
             traceback.print_exc()
             yield {"type": AIResponse.TEXT, "content": f"\n\n**Error:** {str(e)}"}
+
+    def _tool_call_response(self):
+        if self.accumulated_tool_call_chunk:
+            yield {"type": AIResponse.TOOL_CALL,
+                   "content": self.accumulated_tool_call_chunk}
+
+            name = self.accumulated_tool_call_chunk.tool_calls[0].get("name", "Unknown Tool")
+            args = self.accumulated_tool_call_chunk.tool_calls[0].get("args", {})
+            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
+                   "content": f"️🛠️ Calling tool: {name}\n\n"}
+
+            formatted_args = json.dumps(args, indent=2, ensure_ascii=False)
+            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
+                   "content": f"**Arguments:**\n"
+                              f"```json\n{formatted_args}\n```\n"}
+
+            self.accumulated_tool_call_chunk = None
+
+    def _tool_message_response(self, msg : ToolMessage):
+        try:
+            data = json.loads(msg.content)
+            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
+            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
+                   "content": f"✅ Tool {msg.name}\n\n"
+                              f"**Response:**\n"
+                              f"```json\n{formatted_json}\n```\n"}
+        except (json.JSONDecodeError, TypeError):
+            yield {"type": AIResponse.FORMATTED_TOOL_LOG,
+                   "content": f"✅ Tool {msg.name}\n\n"
+                              f"**Response:**\n"
+                              f"```json\n{msg.content}\n```\n"}
+        finally:
+            yield {"type": AIResponse.TOOL_RESPONSE,
+                   "content": msg}
 
     def stream_response(self, message: str, chat_history=None):
         """Synchronous wrapper for astream_response to make it compatibility with Streamlit loop."""

@@ -66,3 +66,7 @@ streamlit run streamlit_app.py
 Your browser should automatically open to the Streamlit application. If not, navigate to `http://localhost:8501` (or the address shown in your terminal).
 
 Enjoy chatting with your OpenSearch-powered LLM assistant! ✨
+
+## Troubleshooting
+
+-   **LM Studio Model Stops Mid-Response**: If you are using LM Studio and the AI suddenly stops responding in the middle of a sentence, it often indicates that the model has hit its context window limit. To resolve this, you need to **increase the context length** setting for the model within the LM Studio application itself. Look for settings related to "Context Length" or "Max Tokens" for the loaded model.

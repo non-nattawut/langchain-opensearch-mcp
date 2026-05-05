@@ -32,7 +32,7 @@ class LLMFactory:
             case "LMSTUDIO":
                 return ChatOpenAI(
                     base_url=os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1"),
-                    api_key=SecretStr(os.getenv("LMSTUDIO_API_KEY", "not-needed")), # LM Studio doesn't usually require a key
+                    api_key=SecretStr(os.getenv("LMSTUDIO_API_KEY", "not-needed")),
                     model=os.getenv("LMSTUDIO_MODEL", "local-model"),
                     temperature=temperature,
                     top_p=top_p
