@@ -16,8 +16,8 @@ Follow these steps to set up and run the application.
 ### Prerequisites
 
 -   Docker and Docker Compose installed.
--   Python 3.9+
--   `uv` (or `pip`) for dependency management.
+-   Python 3.14+
+-   `uv` for dependency management.
 
 ### 1. Configure Environment Variables
 
@@ -51,10 +51,8 @@ First, install the project dependencies. It's recommended to use a virtual envir
 python -m venv .venv
 source .venv/bin/activate # On Windows: .venv\Scripts\activate
 
-# Install dependencies using uv (or pip)
+# Install dependencies using uv
 uv sync
-# or
-# pip install -r requirements.txt
 ```
 
 Now, run the Streamlit application:

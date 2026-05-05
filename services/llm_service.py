@@ -14,6 +14,7 @@ from services.skill_service import SkillService
 
 load_dotenv()
 
+
 class LLMService:
     def __init__(self):
         # Initialize basic components
@@ -58,7 +59,7 @@ class LLMService:
                 async for chunk in self.agent.astream(inputs, stream_mode="messages"):
                     msg, metadata = chunk
                     if msg.content or msg.tool_calls:
-                        print(msg) # log
+                        print(msg)  # log
 
                     # AI Response
                     if isinstance(msg, AIMessage) and msg.content:
@@ -102,7 +103,7 @@ class LLMService:
 
             self.accumulated_tool_call_chunk = None
 
-    def _tool_message_response(self, msg : ToolMessage):
+    def _tool_message_response(self, msg: ToolMessage):
         try:
             data = json.loads(msg.content)
             formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
